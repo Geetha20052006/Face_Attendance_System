@@ -13,7 +13,7 @@ FACE_MATCH_THRESHOLD = 0.5
 
 # ---------------- Attendance Settings ----------------
 # Time intervals (in minutes) during a 50-minute lecture
-CAPTURE_TIMES = [10, 25, 45]
+CAPTURE_TIMES = [1, 3, 5]
 
 # ---------------- General Settings ----------------
 FRAME_WIDTH = 640
