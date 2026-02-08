@@ -3,6 +3,8 @@ import time
 import pickle
 import face_recognition
 import pandas as pd
+from datetime import datetime
+import os
 from config import CAMERA_ID, FACE_MATCH_THRESHOLD, CAPTURE_TIMES
 
 # ---------- Load Encodings ----------
@@ -10,9 +12,10 @@ with open("encodings/face_encodings.pkl", "rb") as f:
     data = pickle.load(f)
 
 known_encodings = data["encodings"]
-known_names = list(set(data["names"]))
+known_names = list(set(data["names"]))  # unique students
 
 # ---------- Initialize Attendance Dictionary ----------
+# Presence vector for each student
 attendance = {name: [0] * len(CAPTURE_TIMES) for name in known_names}
 
 # ---------- Camera ----------
@@ -37,16 +40,16 @@ while capture_index < len(CAPTURE_TIMES):
 
     for encoding in encodings:
         matches = face_recognition.compare_faces(
-            data["encodings"], encoding, tolerance=FACE_MATCH_THRESHOLD
+            known_encodings, encoding, tolerance=FACE_MATCH_THRESHOLD
         )
 
         if True in matches:
             idx = matches.index(True)
             detected_students.add(data["names"][idx])
 
-    # ---------- Capture at Interval ----------
+    # ---------- Capture Attendance at Interval ----------
     if elapsed_minutes >= CAPTURE_TIMES[capture_index]:
-        print(f"📸 Capturing attendance at {CAPTURE_TIMES[capture_index]} min")
+        print(f"📸 Capturing attendance at {CAPTURE_TIMES[capture_index]} minutes")
 
         for student in attendance:
             if student in detected_students:
@@ -61,18 +64,50 @@ while capture_index < len(CAPTURE_TIMES):
 cap.release()
 cv2.destroyAllWindows()
 
-# ---------- Majority Voting ----------
-final_attendance = {}
+# =====================================================
+# MODULE 7: DATA MANAGEMENT & RECORD CONSOLIDATION
+# =====================================================
 
-for student, records in attendance.items():
-    final_attendance[student] = "Present" if sum(records) >= 2 else "Absent"
+records = []
+timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+CLASS_NAME = "class_A"
 
-# ---------- Save to Excel ----------
-df = pd.DataFrame([
-    {"Student": s, "Attendance": a}
-    for s, a in final_attendance.items()
-])
+for student, presence_vector in attendance.items():
+    # Expected format: ID_Name
+    try:
+        student_id, student_name = student.split("_", 1)
+    except ValueError:
+        student_id = "NA"
+        student_name = student
 
-df.to_excel("attendance/final_attendance.xlsx", index=False)
+    final_status = "Present" if sum(presence_vector) >= 2 else "Absent"
 
-print("✅ Attendance captured and saved successfully")
+    records.append({
+        "Student ID": student_id,
+        "Student Name": student_name,
+        "Class": CLASS_NAME,
+        "Presence Vector": str(presence_vector),
+        "Final Attendance": final_status,
+        "Timestamp": timestamp
+    })
+
+# Create DataFrame
+df = pd.DataFrame(records)
+
+# ---------- Data Validation ----------
+df.drop_duplicates(subset=["Student ID"], inplace=True)
+df.fillna("N/A", inplace=True)
+
+print("✅ Attendance data consolidated")
+
+# =====================================================
+# MODULE 8: EXCEL REPORT GENERATION
+# =====================================================
+
+# Ensure output folder exists
+os.makedirs("attendance", exist_ok=True)
+
+file_name = f"attendance/Attendance_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+df.to_excel(file_name, index=False)
+
+print(f"✅ Attendance report generated: {file_name}")
